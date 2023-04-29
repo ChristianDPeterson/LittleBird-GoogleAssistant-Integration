@@ -21,7 +21,7 @@ const {smarthome} = require("actions-on-google");
 const {google} = require("googleapis");
 const util = require("util");
 const admin = require("firebase-admin");
-const https = require("follow-redirects").https;
+const request = require("request");
 
 // Initialize Firebase
 admin.initializeApp();
@@ -113,31 +113,6 @@ app.onSync((body) => {
     payload: {
       agentUserId: USER_ID,
       devices: [
-        // {
-        //   id: "washer",
-        //   type: "action.devices.types.WASHER",
-        //   traits: [
-        //     "action.devices.traits.OnOff",
-        //     "action.devices.traits.StartStop",
-        //     "action.devices.traits.RunCycle",
-        //   ],
-        //   name: {
-        //     defaultNames: ["My Washer"],
-        //     name: "Washer",
-        //     nicknames: ["Washer"],
-        //   },
-        //   deviceInfo: {
-        //     manufacturer: "Acme Co",
-        //     model: "acme-washer",
-        //     hwVersion: "1.0",
-        //     swVersion: "1.0.1",
-        //   },
-        //   willReportState: true,
-        //   attributes: {
-        //     pausable: true,
-        //   },
-        //   // TODO: Add otherDeviceIds for local execution
-        // },
         {
           id: "lock",
           type: "action.devices.types.LOCK",
@@ -164,34 +139,14 @@ const queryFirebase = async (deviceId) => {
   const snapshot = await firebaseRef.child(deviceId).once("value");
   const snapshotVal = snapshot.val();
   return {
-    // on: snapshotVal.OnOff.on,
-    // isPaused: snapshotVal.StartStop.isPaused,
-    // isRunning: snapshotVal.StartStop.isRunning,
     isLocked: snapshotVal.LockUnlock.isLocked,
-    isJammed: snapshotVal.LockUnlock.isJammed,
-    online: snapshotVal.LockUnlock.online,
-    status: snapshotVal.LockUnlock.status,
   };
 };
+
 const queryDevice = async (deviceId) => {
   const data = await queryFirebase(deviceId);
   return {
-    // on: data.on,
-    // isPaused: data.isPaused,
-    // isRunning: data.isRunning,
-    // currentRunCycle: [
-    //   {
-    //     currentCycle: "rinse",
-    //     nextCycle: "spin",
-    //     lang: "en",
-    //   },
-    // ],
-    // currentTotalRemainingTime: 1212,
-    // currentCycleRemainingTime: 301,
     isLocked: data.isLocked,
-    isJammed: data.isJammed,
-    online: data.online,
-    status: data.status,
   };
 };
 
@@ -219,56 +174,42 @@ app.onQuery(async (body) => {
   };
 });
 
-const updateYaleLock = async (status) => {
+const updateYaleLock = (status, onSuccess, onError) => {
   const options = {
     "method": "POST",
-    "hostname": "api.littlebirdliving.com",
     // eslint-disable-next-line max-len
-    "path": `/properties/${process.env.PROPERTY_ID}/units/${process.env.UNIT_ID}/panel/devices/locks/${process.env.LOCK_ID}`,
+    "url": `https://api.littlebirdliving.com/properties/${process.env.PROPERTY_ID}/units/${process.env.UNIT_ID}/panel/devices/locks/${process.env.LOCK_ID}`,
     "headers": {
-      "authorization": process.env.LITTLEBIRD_AUTH_TOKEN,
-      "host": "api.littlebirdliving.com",
       "content-type": "application/json",
-      // eslint-disable-next-line max-len
-      "user-agent": "LittleBirdNativeProd/1641525660 CFNetwork/1327.0.4 Darwin/21.2.0",
-      "api-version": ">=0.8.0 <2.0.0",
       "accept": "application/json",
       "accept-language": "en-US,en;q=0.9",
-      "content-length": "20",
       "accept-encoding": "gzip, deflate, br",
-      "connection": "keep-alive",
+      "authorization": process.env.LITTLEBIRD_AUTH_TOKEN,
     },
-    "maxRedirects": 20,
+    "body": JSON.stringify({
+      "status": status,
+    }),
   };
 
-  const req = https.request(options, (res) => {
-    const chunks = [];
-
-    res.on("data", (chunk) => {
-      chunks.push(chunk);
-    });
-
-    res.on("end", (chunk) => {
-      const body = Buffer.concat(chunks);
-      console.log(body.toString());
-    });
-
-    res.on("error", (error) => {
-      console.error(error);
-    });
+  request(options, (error, response) => {
+    if (error) {
+      throw new Error(error);
+    }
+    console.log(response.body);
   });
-
-  const postData = JSON.stringify({
-    "status": status,
-  });
-
-  req.write(postData);
-
-  req.end();
 };
 
 const updateDevice = async (execution, deviceId) => {
   const {params, command} = execution;
+
+  // Update device state
+  if (params.lock === true) {
+    updateYaleLock("SECURED");
+  } else if (params.lock === false) {
+    updateYaleLock("UNSECURED");
+  }
+
+  // Update Firebase DB
   let state;
   let ref;
   switch (command) {
@@ -276,20 +217,6 @@ const updateDevice = async (execution, deviceId) => {
       state = {isLocked: params.lock};
       ref = firebaseRef.child(deviceId).child("LockUnlock");
       break;
-    // case "action.devices.commands.StartStop":
-    //   state = {isRunning: params.start};
-    //   ref = firebaseRef.child(deviceId).child("StartStop");
-    //   break;
-    // case "action.devices.commands.PauseUnpause":
-    //   state = {isPaused: params.pause};
-    //   ref = firebaseRef.child(deviceId).child("StartStop");
-    //   break;
-  }
-
-  if (params.lock === true) {
-    updateYaleLock("SECURED");
-  } else if (params.lock === false) {
-    updateYaleLock("UNSECURED");
   }
 
   return ref.update(state).then(() => state);
@@ -377,13 +304,7 @@ exports.reportstate = functions.database
             states: {
               /* Report the current state of our lock */
               [context.params.deviceId]: {
-                status: snapshot.LockUnlock.status,
                 isLocked: snapshot.LockUnlock.isLocked,
-                isJammed: snapshot.LockUnlock.isJammed,
-                online: snapshot.LockUnlock.online,
-                // on: snapshot.OnOff.on,
-                // isPaused: snapshot.StartStop.isPaused,
-                // isRunning: snapshot.StartStop.isRunning,
               },
             },
           },
@@ -400,19 +321,10 @@ exports.reportstate = functions.database
  * Update the current state of the washer device
  */
 exports.updatestate = functions.https.onRequest((request, response) => {
+  console.log({request});
   firebaseRef.child("lock").update({
-    // OnOff: {
-    //   on: request.body.on,
-    // },
-    // StartStop: {
-    //   isPaused: request.body.isPaused,
-    //   isRunning: request.body.isRunning,
-    // },
     LockUnlock: {
-      isLocked: request.body.isLocked,
-      isJammed: request.body.isJammed,
-      online: request.body.online,
-      status: request.body.status,
+      isLocked: request.body.lock,
     },
   });
 

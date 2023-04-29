@@ -2,7 +2,7 @@
 	"name": "smarthome-local",
 	"description": "Codelab for controlling devices through the Google Assistant",
 	"engines": {
-		"node": "10"
+		"node": "16"
 	},
 	"scripts": {
 		"lint": "eslint . --fix"
@@ -12,7 +12,8 @@
 		"cors": "^2.8.5",
 		"firebase-admin": "^8.0.0",
 		"firebase-functions": "^3.8.0",
-		"googleapis": "^43.0.0"
+		"googleapis": "^43.0.0",
+		"request": "^2.88.2"
 	},
 	"private": true,
 	"devDependencies": {
