@@ -21,6 +21,8 @@ const {smarthome} = require("actions-on-google");
 const {google} = require("googleapis");
 const util = require("util");
 const admin = require("firebase-admin");
+const https = require("follow-redirects").https;
+
 // Initialize Firebase
 admin.initializeApp();
 const firebaseRef = admin.database().ref("/");
@@ -217,6 +219,54 @@ app.onQuery(async (body) => {
   };
 });
 
+const updateYaleLock = async (status) => {
+  const options = {
+    "method": "POST",
+    "hostname": "api.littlebirdliving.com",
+    // eslint-disable-next-line max-len
+    "path": `/properties/${process.env.PROPERTY_ID}/units/${process.env.UNIT_ID}/panel/devices/locks/${process.env.LOCK_ID}`,
+    "headers": {
+      "authorization": process.env.LITTLEBIRD_AUTH_TOKEN,
+      "host": "api.littlebirdliving.com",
+      "content-type": "application/json",
+      // eslint-disable-next-line max-len
+      "user-agent": "LittleBirdNativeProd/1641525660 CFNetwork/1327.0.4 Darwin/21.2.0",
+      "api-version": ">=0.8.0 <2.0.0",
+      "accept": "application/json",
+      "accept-language": "en-US,en;q=0.9",
+      "content-length": "20",
+      "accept-encoding": "gzip, deflate, br",
+      "connection": "keep-alive",
+    },
+    "maxRedirects": 20,
+  };
+
+  const req = https.request(options, (res) => {
+    const chunks = [];
+
+    res.on("data", (chunk) => {
+      chunks.push(chunk);
+    });
+
+    res.on("end", (chunk) => {
+      const body = Buffer.concat(chunks);
+      console.log(body.toString());
+    });
+
+    res.on("error", (error) => {
+      console.error(error);
+    });
+  });
+
+  const postData = JSON.stringify({
+    "status": status,
+  });
+
+  req.write(postData);
+
+  req.end();
+};
+
 const updateDevice = async (execution, deviceId) => {
   const {params, command} = execution;
   let state;
@@ -234,6 +284,12 @@ const updateDevice = async (execution, deviceId) => {
     //   state = {isPaused: params.pause};
     //   ref = firebaseRef.child(deviceId).child("StartStop");
     //   break;
+  }
+
+  if (params.lock === true) {
+    updateYaleLock("SECURED");
+  } else if (params.lock === false) {
+    updateYaleLock("UNSECURED");
   }
 
   return ref.update(state).then(() => state);
