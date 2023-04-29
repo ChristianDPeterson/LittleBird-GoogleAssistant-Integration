@@ -14,30 +14,30 @@
  * limitations under the License.
  */
 
-'use strict';
+"use strict";
 
-const functions = require('firebase-functions');
-const {smarthome} = require('actions-on-google');
-const {google} = require('googleapis');
-const util = require('util');
-const admin = require('firebase-admin');
+const functions = require("firebase-functions");
+const {smarthome} = require("actions-on-google");
+const {google} = require("googleapis");
+const util = require("util");
+const admin = require("firebase-admin");
 // Initialize Firebase
 admin.initializeApp();
-const firebaseRef = admin.database().ref('/');
+const firebaseRef = admin.database().ref("/");
 // Initialize Homegraph
 const auth = new google.auth.GoogleAuth({
-  scopes: ['https://www.googleapis.com/auth/homegraph'],
+  scopes: ["https://www.googleapis.com/auth/homegraph"],
 });
 const homegraph = google.homegraph({
-  version: 'v1',
+  version: "v1",
   auth: auth,
 });
 // Hardcoded user ID
-const USER_ID = '123';
+const USER_ID = "123";
 
 exports.login = functions.https.onRequest((request, response) => {
-  if (request.method === 'GET') {
-    functions.logger.log('Requesting login page');
+  if (request.method === "GET") {
+    functions.logger.log("Requesting login page");
     response.send(`
     <html>
       <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -52,7 +52,7 @@ exports.login = functions.https.onRequest((request, response) => {
       </body>
     </html>
   `);
-  } else if (request.method === 'POST') {
+  } else if (request.method === "POST") {
     // Here, you should validate the user account.
     // In this sample, we do not do that.
     const responseurl = decodeURIComponent(request.body.responseurl);
@@ -60,43 +60,47 @@ exports.login = functions.https.onRequest((request, response) => {
     return response.redirect(responseurl);
   } else {
     // Unsupported method
-    response.send(405, 'Method Not Allowed');
+    response.send(405, "Method Not Allowed");
   }
 });
 
 exports.fakeauth = functions.https.onRequest((request, response) => {
-  const responseurl = util.format('%s?code=%s&state=%s',
-      decodeURIComponent(request.query.redirect_uri), 'xxxxxx',
-      request.query.state);
+  const responseurl = util.format(
+      "%s?code=%s&state=%s",
+      decodeURIComponent(request.query.redirect_uri),
+      "xxxxxx",
+      request.query.state,
+  );
   functions.logger.log(`Set redirect as ${responseurl}`);
   return response.redirect(
-      `/login?responseurl=${encodeURIComponent(responseurl)}`);
+      `/login?responseurl=${encodeURIComponent(responseurl)}`,
+  );
 });
 
 exports.faketoken = functions.https.onRequest((request, response) => {
   const grantType = request.query.grant_type ?
-    request.query.grant_type : request.body.grant_type;
+    request.query.grant_type :
+    request.body.grant_type;
   const secondsInDay = 86400; // 60 * 60 * 24
   const HTTP_STATUS_OK = 200;
   functions.logger.log(`Grant type ${grantType}`);
 
   let obj;
-  if (grantType === 'authorization_code') {
+  if (grantType === "authorization_code") {
     obj = {
-      token_type: 'bearer',
-      access_token: '123access',
-      refresh_token: '123refresh',
+      token_type: "bearer",
+      access_token: "123access",
+      refresh_token: "123refresh",
       expires_in: secondsInDay,
     };
-  } else if (grantType === 'refresh_token') {
+  } else if (grantType === "refresh_token") {
     obj = {
-      token_type: 'bearer',
-      access_token: '123access',
+      token_type: "bearer",
+      access_token: "123access",
       expires_in: secondsInDay,
     };
   }
-  response.status(HTTP_STATUS_OK)
-      .json(obj);
+  response.status(HTTP_STATUS_OK).json(obj);
 });
 
 const app = smarthome();
@@ -106,57 +110,86 @@ app.onSync((body) => {
     requestId: body.requestId,
     payload: {
       agentUserId: USER_ID,
-      devices: [{
-        id: 'washer',
-        type: 'action.devices.types.WASHER',
-        traits: [
-          'action.devices.traits.OnOff',
-          'action.devices.traits.StartStop',
-          'action.devices.traits.RunCycle',
-        ],
-        name: {
-          defaultNames: ['My Washer'],
-          name: 'Washer',
-          nicknames: ['Washer'],
+      devices: [
+        // {
+        //   id: "washer",
+        //   type: "action.devices.types.WASHER",
+        //   traits: [
+        //     "action.devices.traits.OnOff",
+        //     "action.devices.traits.StartStop",
+        //     "action.devices.traits.RunCycle",
+        //   ],
+        //   name: {
+        //     defaultNames: ["My Washer"],
+        //     name: "Washer",
+        //     nicknames: ["Washer"],
+        //   },
+        //   deviceInfo: {
+        //     manufacturer: "Acme Co",
+        //     model: "acme-washer",
+        //     hwVersion: "1.0",
+        //     swVersion: "1.0.1",
+        //   },
+        //   willReportState: true,
+        //   attributes: {
+        //     pausable: true,
+        //   },
+        //   // TODO: Add otherDeviceIds for local execution
+        // },
+        {
+          id: "lock",
+          type: "action.devices.types.LOCK",
+          traits: ["action.devices.traits.LockUnlock"],
+          name: {
+            defaultNames: ["My Door Lock"],
+            name: "Door Lock",
+            nicknames: ["Door Lock"],
+          },
+          deviceInfo: {
+            manufacturer: "Yale",
+            model: "yale-lock",
+            hwVersion: "1.0",
+            swVersion: "1.0.1",
+          },
+          willReportState: false,
         },
-        deviceInfo: {
-          manufacturer: 'Acme Co',
-          model: 'acme-washer',
-          hwVersion: '1.0',
-          swVersion: '1.0.1',
-        },
-        willReportState: true,
-        attributes: {
-          pausable: true,
-        },
-        // TODO: Add otherDeviceIds for local execution
-      }],
+      ],
     },
   };
 });
 
 const queryFirebase = async (deviceId) => {
-  const snapshot = await firebaseRef.child(deviceId).once('value');
+  const snapshot = await firebaseRef.child(deviceId).once("value");
   const snapshotVal = snapshot.val();
   return {
-    on: snapshotVal.OnOff.on,
-    isPaused: snapshotVal.StartStop.isPaused,
-    isRunning: snapshotVal.StartStop.isRunning,
+    // on: snapshotVal.OnOff.on,
+    // isPaused: snapshotVal.StartStop.isPaused,
+    // isRunning: snapshotVal.StartStop.isRunning,
+    isLocked: snapshotVal.LockUnlock.isLocked,
+    isJammed: snapshotVal.LockUnlock.isJammed,
+    online: snapshotVal.LockUnlock.online,
+    status: snapshotVal.LockUnlock.status,
   };
 };
 const queryDevice = async (deviceId) => {
   const data = await queryFirebase(deviceId);
   return {
-    on: data.on,
-    isPaused: data.isPaused,
-    isRunning: data.isRunning,
-    currentRunCycle: [{
-      currentCycle: 'rinse',
-      nextCycle: 'spin',
-      lang: 'en',
-    }],
-    currentTotalRemainingTime: 1212,
-    currentCycleRemainingTime: 301,
+    // on: data.on,
+    // isPaused: data.isPaused,
+    // isRunning: data.isRunning,
+    // currentRunCycle: [
+    //   {
+    //     currentCycle: "rinse",
+    //     nextCycle: "spin",
+    //     lang: "en",
+    //   },
+    // ],
+    // currentTotalRemainingTime: 1212,
+    // currentCycleRemainingTime: 301,
+    isLocked: data.isLocked,
+    isJammed: data.isJammed,
+    online: data.online,
+    status: data.status,
   };
 };
 
@@ -169,12 +202,12 @@ app.onQuery(async (body) => {
   const intent = body.inputs[0];
   for (const device of intent.payload.devices) {
     const deviceId = device.id;
-    queryPromises.push(queryDevice(deviceId)
-        .then((data) => {
-        // Add response to device payload
+    queryPromises.push(
+        queryDevice(deviceId).then((data) => {
+          // Add response to device payload
           payload.devices[deviceId] = data;
-        },
-        ));
+        }),
+    );
   }
   // Wait for all promises to resolve
   await Promise.all(queryPromises);
@@ -186,24 +219,24 @@ app.onQuery(async (body) => {
 
 const updateDevice = async (execution, deviceId) => {
   const {params, command} = execution;
-  let state; let ref;
+  let state;
+  let ref;
   switch (command) {
-    case 'action.devices.commands.OnOff':
-      state = {on: params.on};
-      ref = firebaseRef.child(deviceId).child('OnOff');
+    case "action.devices.commands.LockUnlock":
+      state = {lock: params.lock};
+      ref = firebaseRef.child(deviceId).child("LockUnlock");
       break;
-    case 'action.devices.commands.StartStop':
-      state = {isRunning: params.start};
-      ref = firebaseRef.child(deviceId).child('StartStop');
-      break;
-    case 'action.devices.commands.PauseUnpause':
-      state = {isPaused: params.pause};
-      ref = firebaseRef.child(deviceId).child('StartStop');
-      break;
+    // case "action.devices.commands.StartStop":
+    //   state = {isRunning: params.start};
+    //   ref = firebaseRef.child(deviceId).child("StartStop");
+    //   break;
+    // case "action.devices.commands.PauseUnpause":
+    //   state = {isPaused: params.pause};
+    //   ref = firebaseRef.child(deviceId).child("StartStop");
+    //   break;
   }
 
-  return ref.update(state)
-      .then(() => state);
+  return ref.update(state).then(() => state);
 };
 
 app.onExecute(async (body) => {
@@ -211,7 +244,7 @@ app.onExecute(async (body) => {
   // Execution results are grouped by status
   const result = {
     ids: [],
-    status: 'SUCCESS',
+    status: "SUCCESS",
     states: {
       online: true,
     },
@@ -228,7 +261,9 @@ app.onExecute(async (body) => {
                   result.ids.push(device.id);
                   Object.assign(result.states, data);
                 })
-                .catch(() => functions.logger.error('EXECUTE', device.id)),
+                .catch(() =>
+                  functions.logger.error("EXECUTE", device.id),
+                ),
         );
       }
     }
@@ -244,7 +279,7 @@ app.onExecute(async (body) => {
 });
 
 app.onDisconnect((body, headers) => {
-  functions.logger.log('User account unlinked from Google Assistant');
+  functions.logger.log("User account unlinked from Google Assistant");
   // Return empty response
   return {};
 });
@@ -252,7 +287,7 @@ app.onDisconnect((body, headers) => {
 exports.smarthome = functions.https.onRequest(app);
 
 exports.requestsync = functions.https.onRequest(async (request, response) => {
-  response.set('Access-Control-Allow-Origin', '*');
+  response.set("Access-Control-Allow-Origin", "*");
   functions.logger.info(`Request SYNC for user ${USER_ID}`);
   try {
     const res = await homegraph.devices.requestSync({
@@ -260,7 +295,7 @@ exports.requestsync = functions.https.onRequest(async (request, response) => {
         agentUserId: USER_ID,
       },
     });
-    functions.logger.info('Request sync response:', res.status, res.data);
+    functions.logger.info("Request sync response:", res.status, res.data);
     response.json(res.data);
   } catch (err) {
     functions.logger.error(err);
@@ -272,22 +307,27 @@ exports.requestsync = functions.https.onRequest(async (request, response) => {
  * Send a REPORT STATE call to the homegraph when data for any device id
  * has been changed.
  */
-exports.reportstate = functions.database.ref('{deviceId}').onWrite(
-    async (change, context) => {
-      functions.logger.info('Firebase write event triggered Report State');
+exports.reportstate = functions.database
+    .ref("{deviceId}")
+    .onWrite(async (change, context) => {
+      functions.logger.info("Firebase write event triggered Report State");
       const snapshot = change.after.val();
 
       const requestBody = {
-        requestId: 'ff36a3cc', /* Any unique ID */
+        requestId: "ff36a3cc" /* Any unique ID */,
         agentUserId: USER_ID,
         payload: {
           devices: {
             states: {
-              /* Report the current state of our washer */
+              /* Report the current state of our lock */
               [context.params.deviceId]: {
-                on: snapshot.OnOff.on,
-                isPaused: snapshot.StartStop.isPaused,
-                isRunning: snapshot.StartStop.isRunning,
+                status: snapshot.LockUnlock.status,
+                isLocked: snapshot.LockUnlock.isLocked,
+                isJammed: snapshot.LockUnlock.isJammed,
+                online: snapshot.LockUnlock.online,
+                // on: snapshot.OnOff.on,
+                // isPaused: snapshot.StartStop.isPaused,
+                // isRunning: snapshot.StartStop.isRunning,
               },
             },
           },
@@ -297,20 +337,26 @@ exports.reportstate = functions.database.ref('{deviceId}').onWrite(
       const res = await homegraph.devices.reportStateAndNotification({
         requestBody,
       });
-      functions.logger.info('Report state response:', res.status, res.data);
+      functions.logger.info("Report state response:", res.status, res.data);
     });
 
 /**
  * Update the current state of the washer device
  */
 exports.updatestate = functions.https.onRequest((request, response) => {
-  firebaseRef.child('washer').update({
-    OnOff: {
-      on: request.body.on,
-    },
-    StartStop: {
-      isPaused: request.body.isPaused,
-      isRunning: request.body.isRunning,
+  firebaseRef.child("lock").update({
+    // OnOff: {
+    //   on: request.body.on,
+    // },
+    // StartStop: {
+    //   isPaused: request.body.isPaused,
+    //   isRunning: request.body.isRunning,
+    // },
+    LockUnlock: {
+      isLocked: request.body.isLocked,
+      isJammed: request.body.isJammed,
+      online: request.body.online,
+      status: request.body.status,
     },
   });
 
