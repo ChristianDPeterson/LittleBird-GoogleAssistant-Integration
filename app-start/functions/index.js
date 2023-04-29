@@ -223,7 +223,7 @@ const updateDevice = async (execution, deviceId) => {
   let ref;
   switch (command) {
     case "action.devices.commands.LockUnlock":
-      state = {lock: params.lock};
+      state = {isLocked: params.lock};
       ref = firebaseRef.child(deviceId).child("LockUnlock");
       break;
     // case "action.devices.commands.StartStop":
